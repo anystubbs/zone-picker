@@ -1,0 +1,40 @@
+{
+  "name": "secret-garden",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Interactive geographic zone selection library using Paper.js",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "private": true,
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "test": "vitest",
+    "test:ui": "vitest --ui"
+  },
+  "keywords": [
+    "maps",
+    "zones",
+    "geography",
+    "selection",
+    "paper.js",
+    "canvas"
+  ],
+  "author": "",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@types/node": "^24.2.1",
+    "@vitest/ui": "^3.2.4",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.2",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "paper": "^0.12.18"
+  }
+}
