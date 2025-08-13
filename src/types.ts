@@ -12,6 +12,7 @@ export interface Zone {
 export interface ZoneSelectorConfig {
   canvas: HTMLCanvasElement;
   zones: Zone[];
+  viewport: ViewportBounds;
   onSelectionChange?: (selectedZones: Zone[]) => void;
   onCategoryChange?: (category: string) => void;
 }

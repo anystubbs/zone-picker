@@ -1,8 +1,7 @@
-import * as paper from 'paper';
+import paper from 'paper';
 import { Zone, ZoneSelectorConfig, ViewportBounds } from './types';
 
 export class ZoneSelector {
-  private paper: paper.PaperScope;
   private zones: Zone[];
   private currentCategory: string;
   private categories: string[];
@@ -15,17 +14,14 @@ export class ZoneSelector {
     this.zones = [...config.zones];
     this.onSelectionChange = config.onSelectionChange;
     this.onCategoryChange = config.onCategoryChange;
+    this.viewportBounds = config.viewport;
     
     // Extract unique categories
     this.categories = [...new Set(this.zones.map(zone => zone.category))];
     this.currentCategory = this.categories[0] || '';
     
     // Initialize Paper.js with the provided canvas
-    this.paper = new paper.PaperScope();
-    this.paper.setup(config.canvas);
-    
-    // Calculate initial viewport bounds
-    this.viewportBounds = this.calculateViewportBounds();
+    paper.setup(config.canvas);
     
     // Initial render
     this.render();
@@ -34,29 +30,10 @@ export class ZoneSelector {
     this.setupEventHandlers();
   }
 
-  private calculateViewportBounds(): ViewportBounds {
-    const coords = this.zones.flatMap(zone => {
-      if (zone.geometry.type === 'Point') {
-        return [zone.geometry.coordinates as number[]];
-      } else {
-        return zone.geometry.coordinates as number[][];
-      }
-    }).flat();
-
-    const x_coords = coords.filter((_, i) => i % 2 === 0);
-    const y_coords = coords.filter((_, i) => i % 2 === 1);
-
-    return {
-      minX: Math.min(...x_coords),
-      minY: Math.min(...y_coords),
-      maxX: Math.max(...x_coords),
-      maxY: Math.max(...y_coords)
-    };
-  }
 
   private setupEventHandlers(): void {
-    this.paper.view.onMouseDown = (event: paper.MouseEvent) => {
-      const hitResult = this.paper.project.hitTest(event.point);
+    paper.view.onMouseDown = (event: paper.MouseEvent) => {
+      const hitResult = paper.project.hitTest(event.point);
       if (hitResult?.item) {
         const zoneId = hitResult.item.data.zoneId;
         if (zoneId) {
@@ -68,17 +45,21 @@ export class ZoneSelector {
 
   private render(): void {
     // Clear existing shapes
-    this.paper.project.clear();
+    paper.project.clear();
     this.zoneShapes.clear();
 
     // Only render zones from current category
     const currentZones = this.zones.filter(zone => zone.category === this.currentCategory);
     
+    console.log('Rendering', currentZones.length, 'zones from category:', this.currentCategory);
+    console.log('Viewport bounds:', this.viewportBounds);
+    console.log('Canvas size:', paper.view.size);
+    
     currentZones.forEach(zone => {
       this.renderZone(zone);
     });
 
-    this.paper.view.update();
+    paper.view.update();
   }
 
   private renderZone(zone: Zone): void {
@@ -87,24 +68,33 @@ export class ZoneSelector {
     if (zone.geometry.type === 'Point') {
       const [x, y] = zone.geometry.coordinates as number[];
       const point = this.worldToCanvas(x, y);
-      shape = new this.paper.Path.Circle(point, 10);
+      console.log('Point zone:', zone.id, 'coords:', [x, y], 'canvas:', point);
+      shape = new paper.Path.Circle(point, 15);
     } else {
-      const coords = zone.geometry.coordinates as number[][];
-      const pathData = coords.map(([x, y], index) => {
-        const point = this.worldToCanvas(x, y);
-        return index === 0 ? `M${point.x},${point.y}` : `L${point.x},${point.y}`;
-      }).join(' ') + 'Z';
+      const coords = zone.geometry.coordinates as number[][]; // Polygon: [points][x,y]
+      shape = new paper.Path();
       
-      shape = new this.paper.Path(pathData);
+      console.log('Polygon zone:', zone.id, 'first coord:', coords[0]);
+      
+      coords.forEach(([x, y], index) => {
+        const point = this.worldToCanvas(x, y);
+        if (index === 0) {
+          shape.moveTo(point);
+        } else {
+          shape.lineTo(point);
+        }
+      });
+      
+      shape.closePath();
     }
 
     // Style the zone based on selection state
     shape.fillColor = zone.selected 
-      ? new this.paper.Color(0.2, 0.6, 1, 0.6) 
-      : new this.paper.Color(0.8, 0.8, 0.8, 0.3);
+      ? new paper.Color(0.2, 0.6, 1, 0.6) 
+      : new paper.Color(0.8, 0.8, 0.8, 0.3);
     
-    shape.strokeColor = new this.paper.Color(0.2, 0.2, 0.2);
-    shape.strokeWidth = 1;
+    shape.strokeColor = new paper.Color(0.2, 0.2, 0.2);
+    shape.strokeWidth = 2;
 
     // Store zone ID for hit detection
     shape.data = { zoneId: zone.id };
@@ -113,8 +103,8 @@ export class ZoneSelector {
   }
 
   private worldToCanvas(x: number, y: number): paper.Point {
-    const canvasWidth = this.paper.view.size.width;
-    const canvasHeight = this.paper.view.size.height;
+    const canvasWidth = paper.view.size.width;
+    const canvasHeight = paper.view.size.height;
     
     const worldWidth = this.viewportBounds.maxX - this.viewportBounds.minX;
     const worldHeight = this.viewportBounds.maxY - this.viewportBounds.minY;
@@ -122,7 +112,7 @@ export class ZoneSelector {
     const canvasX = ((x - this.viewportBounds.minX) / worldWidth) * canvasWidth;
     const canvasY = canvasHeight - ((y - this.viewportBounds.minY) / worldHeight) * canvasHeight;
     
-    return new this.paper.Point(canvasX, canvasY);
+    return new paper.Point(canvasX, canvasY);
   }
 
   public toggleZoneSelection(zoneId: string): void {
@@ -174,7 +164,7 @@ export class ZoneSelector {
   }
 
   public destroy(): void {
-    this.paper.project.clear();
+    paper.project.clear();
     this.zoneShapes.clear();
   }
 }
