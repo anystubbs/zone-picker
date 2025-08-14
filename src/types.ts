@@ -11,7 +11,7 @@ export interface Zone {
 
 export type DragMode = 'lasso' | 'path';
 
-import { RenderingProvider } from './RenderingProvider';
+import { RenderingProvider } from './providers';
 
 export interface ZoneSelectorConfig {
   provider: RenderingProvider;

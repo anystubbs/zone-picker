@@ -1,7 +1,7 @@
 import paper from 'paper';
 import { Zone, ZoneSelectorConfig, DragMode } from './types';
 import { SelectionStrategy, createSelectionStrategy } from './SelectionStrategy';
-import { RenderingProvider, MouseEvent as ProviderMouseEvent } from './RenderingProvider';
+import { RenderingProvider, MouseEvent as ProviderMouseEvent } from './providers';
 
 export class ZoneSelector {
   private zones: Zone[];

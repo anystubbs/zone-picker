@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import paper from 'paper';
 import { ZoneSelector } from '../src/ZoneSelector';
-import { CanvasRenderingProvider } from '../src/CanvasRenderingProvider';
+import { CanvasRenderingProvider } from '../src/providers';
 import { Zone, ViewportBounds } from '../src/types';
 
 describe('ZoneSelector', () => {

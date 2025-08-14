@@ -1,5 +1,5 @@
 import paper from 'paper';
-import { ViewportBounds } from './types';
+import { ViewportBounds } from '../types';
 import { RenderingProvider, Point, MouseEvent } from './RenderingProvider';
 
 export class CanvasRenderingProvider implements RenderingProvider {
@@ -80,9 +80,11 @@ export class CanvasRenderingProvider implements RenderingProvider {
   }
 
   getCanvasSize(): { width: number; height: number } {
+    // Use the CSS display size, not the buffer size, for coordinate transformation
+    const rect = this.canvas.getBoundingClientRect();
     return {
-      width: this.canvas.width,
-      height: this.canvas.height
+      width: rect.width,
+      height: rect.height
     };
   }
 

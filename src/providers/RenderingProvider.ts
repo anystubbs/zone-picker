@@ -1,4 +1,4 @@
-import { ViewportBounds } from './types';
+import { ViewportBounds } from '../types';
 
 export interface Point {
   x: number;
