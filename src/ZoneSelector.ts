@@ -1,5 +1,6 @@
 import paper from 'paper';
 import { Zone, ZoneSelectorConfig, ViewportBounds, DragMode } from './types';
+import { worldToCanvas, lassoContainsShape, pathIntersectsShape } from './geometry/IntersectionHelpers';
 
 export class ZoneSelector {
   private zones: Zone[];
@@ -123,7 +124,7 @@ export class ZoneSelector {
 
     if (zone.geometry.type === 'Point') {
       const [x, y] = zone.geometry.coordinates as number[];
-      const point = this.worldToCanvas(x, y);
+      const point = worldToCanvas(x, y, this.viewportBounds, paper.view.size);
       console.log('Point zone:', zone.id, 'coords:', [x, y], 'canvas:', point);
       shape = new paper.Path.Circle(point, 15);
     } else {
@@ -133,7 +134,7 @@ export class ZoneSelector {
       console.log('Polygon zone:', zone.id, 'first coord:', coords[0]);
       
       coords.forEach(([x, y], index) => {
-        const point = this.worldToCanvas(x, y);
+        const point = worldToCanvas(x, y, this.viewportBounds, paper.view.size);
         if (index === 0) {
           shape.moveTo(point);
         } else {
@@ -156,19 +157,6 @@ export class ZoneSelector {
     shape.data = { zoneId: zone.id };
     
     this.zoneShapes.set(zone.id, shape);
-  }
-
-  private worldToCanvas(x: number, y: number): paper.Point {
-    const canvasWidth = paper.view.size.width;
-    const canvasHeight = paper.view.size.height;
-    
-    const worldWidth = this.viewportBounds.maxX - this.viewportBounds.minX;
-    const worldHeight = this.viewportBounds.maxY - this.viewportBounds.minY;
-    
-    const canvasX = ((x - this.viewportBounds.minX) / worldWidth) * canvasWidth;
-    const canvasY = canvasHeight - ((y - this.viewportBounds.minY) / worldHeight) * canvasHeight;
-    
-    return new paper.Point(canvasX, canvasY);
   }
 
   private createSelectionShape(): void {
@@ -298,88 +286,12 @@ export class ZoneSelector {
              selectionShape.bounds.contains(shape.bounds);
     } else if (this.dragMode === 'lasso') {
       // Lasso mode: check if zone is actually contained within the lasso area
-      return this.lassoContainsShape(selectionShape, shape);
+      return lassoContainsShape(selectionShape, shape);
     } else {
       // Path mode: check if the drawn line actually intersects the zone shape
-      return this.pathIntersectsShape(selectionShape, shape);
+      return pathIntersectsShape(selectionShape, shape);
     }
   }
-  
-  private lassoContainsShape(lasso: paper.Path, shape: paper.Path): boolean {
-    try {
-      // First check if the zone's center point is contained within the lasso
-      if (lasso.contains(shape.position)) {
-        return true;
-      }
-      
-      // For polygon zones, check if any of the zone's vertices are contained within the lasso
-      if (shape.segments && shape.segments.length > 0) {
-        for (const segment of shape.segments) {
-          if (lasso.contains(segment.point)) {
-            return true;
-          }
-        }
-      }
-      
-      // Also check if the zone's bounds corners are contained (for more coverage)
-      const bounds = shape.bounds;
-      const corners = [
-        bounds.topLeft,
-        bounds.topRight,
-        bounds.bottomLeft,
-        bounds.bottomRight,
-        bounds.center
-      ];
-      
-      for (const corner of corners) {
-        if (lasso.contains(corner)) {
-          return true;
-        }
-      }
-      
-      // Finally, check if the lasso intersects with the zone shape
-      const intersections = lasso.getIntersections(shape);
-      return intersections.length > 0;
-      
-    } catch (error) {
-      // Fallback to center point containment if complex checks fail
-      console.warn('Lasso containment calculation failed, using center fallback:', error);
-      try {
-        return lasso.contains(shape.position);
-      } catch {
-        return false;
-      }
-    }
-  }
-
-  private pathIntersectsShape(path: paper.Path, shape: paper.Path): boolean {
-    try {
-      // Check for actual path intersections using Paper.js intersection detection
-      const intersections = path.getIntersections(shape);
-      if (intersections.length > 0) {
-        return true;
-      }
-      
-      // Also check if path passes through the shape
-      const pathLength = path.length;
-      const sampleCount = Math.max(10, Math.floor(pathLength / 5)); // Sample along the path
-      
-      for (let i = 0; i <= sampleCount; i++) {
-        const offset = (i / sampleCount) * pathLength;
-        const point = path.getPointAt(offset);
-        if (point && shape.contains(point)) {
-          return true;
-        }
-      }
-      
-      return false;
-    } catch (error) {
-      // Fallback to bounds intersection if Paper.js intersection fails
-      console.warn('Path intersection calculation failed, using bounds fallback:', error);
-      return path.bounds.intersects(shape.bounds);
-    }
-  }
-
 
   public toggleZoneSelection(zoneId: string): void {
     const zone = this.zones.find(z => z.id === zoneId);
