@@ -1,6 +1,7 @@
 import paper from 'paper';
 import { Zone, ZoneSelectorConfig, ViewportBounds, DragMode } from './types';
-import { worldToCanvas, lassoContainsShape, pathIntersectsShape } from './geometry/IntersectionHelpers';
+import { worldToCanvas } from './geometry/IntersectionHelpers';
+import { SelectionStrategy, createSelectionStrategy } from './SelectionStrategy';
 
 export class ZoneSelector {
   private zones: Zone[];
@@ -11,6 +12,7 @@ export class ZoneSelector {
   private viewportBounds: ViewportBounds;
   private zoneShapes: Map<string, paper.Path> = new Map();
   private dragMode: DragMode;
+  private selectionStrategy: SelectionStrategy;
   
   // Drag selection state
   private isDragging: boolean = false;
@@ -25,6 +27,7 @@ export class ZoneSelector {
     this.onCategoryChange = config.onCategoryChange;
     this.viewportBounds = config.viewport;
     this.dragMode = config.dragMode || 'rectangle';
+    this.selectionStrategy = createSelectionStrategy(this.dragMode);
     
     // Extract unique categories
     this.categories = [...new Set(this.zones.map(zone => zone.category))];
@@ -160,77 +163,21 @@ export class ZoneSelector {
   }
 
   private createSelectionShape(): void {
-    if (this.dragMode === 'rectangle') {
-      // Create rectangle selection
-      this.selectionShape = new paper.Path.Rectangle(
-        this.dragStart!, 
-        this.dragStart!
-      );
-    } else {
-      // Create lasso/path selection (both use path, different intersection logic)
-      this.selectionShape = new paper.Path();
-      this.selectionShape.moveTo(this.dragStart!);
-    }
-    
-    this.applySelectionStyle();
+    this.selectionShape = this.selectionStrategy.createShape(this.dragStart!);
+    this.selectionStrategy.applyStyle(this.selectionShape, this.isShiftPressed);
   }
   
   private updateSelectionShape(currentPoint: paper.Point): void {
     if (!this.selectionShape || !this.dragStart) return;
     
-    if (this.dragMode === 'rectangle') {
-      // Update rectangle
-      const rectangle = new paper.Rectangle(this.dragStart, currentPoint);
-      this.selectionShape.remove();
-      this.selectionShape = new paper.Path.Rectangle(rectangle);
-      this.applySelectionStyle();
-    } else {
-      // Update lasso/path selection
-      this.selectionShape.lineTo(currentPoint);
-      this.selectionShape.strokeColor = this.isShiftPressed 
-        ? new paper.Color(1, 0.2, 0.2) 
-        : new paper.Color(0.2, 0.6, 1);
-    }
+    this.selectionStrategy.updateShape(this.selectionShape, currentPoint, this.dragStart);
+    this.selectionStrategy.applyStyle(this.selectionShape, this.isShiftPressed);
   }
-  
-  private applySelectionStyle(): void {
-    if (!this.selectionShape) return;
-    
-    if (this.isShiftPressed) {
-      // Red styling for deselection
-      this.selectionShape.strokeColor = new paper.Color(1, 0.2, 0.2);
-      if (this.dragMode === 'rectangle') {
-        this.selectionShape.fillColor = new paper.Color(1, 0.2, 0.2, 0.1);
-      }
-    } else {
-      // Blue styling for selection
-      this.selectionShape.strokeColor = new paper.Color(0.2, 0.6, 1);
-      if (this.dragMode === 'rectangle') {
-        this.selectionShape.fillColor = new paper.Color(0.2, 0.6, 1, 0.1);
-      }
-    }
-    
-    // Different stroke styles for different modes
-    if (this.dragMode === 'rectangle') {
-      this.selectionShape.strokeWidth = 2;
-      this.selectionShape.dashArray = [5, 5];
-    } else if (this.dragMode === 'lasso') {
-      this.selectionShape.strokeWidth = 4;
-      this.selectionShape.dashArray = [8, 4]; // Thick dashed line for lasso area selection
-    } else { // path mode
-      this.selectionShape.strokeWidth = 3;
-      this.selectionShape.dashArray = []; // Solid line for path intersection
-    }
-  }
-  
+
   private completeDragSelection(): void {
-    if (!this.selectionShape) return;
+    if (!this.selectionShape || !this.dragStart) return;
     
-    // Close the lasso path to create a proper enclosed area
-    if (this.dragMode === 'lasso' && this.dragStart) {
-      this.selectionShape.lineTo(this.dragStart);
-      this.selectionShape.closePath();
-    }
+    this.selectionStrategy.completeSelection(this.selectionShape, this.dragStart);
     
     if (this.isShiftPressed) {
       console.log('Shift+drag detected - deselecting zones');
@@ -280,17 +227,7 @@ export class ZoneSelector {
   }
   
   private shapeIntersectsSelection(shape: paper.Path, selectionShape: paper.Path): boolean {
-    if (this.dragMode === 'rectangle') {
-      // Rectangle mode: use bounds intersection
-      return shape.bounds.intersects(selectionShape.bounds) || 
-             selectionShape.bounds.contains(shape.bounds);
-    } else if (this.dragMode === 'lasso') {
-      // Lasso mode: check if zone is actually contained within the lasso area
-      return lassoContainsShape(selectionShape, shape);
-    } else {
-      // Path mode: check if the drawn line actually intersects the zone shape
-      return pathIntersectsShape(selectionShape, shape);
-    }
+    return this.selectionStrategy.testIntersection(shape, selectionShape);
   }
 
   public toggleZoneSelection(zoneId: string): void {
@@ -347,6 +284,7 @@ export class ZoneSelector {
 
   public setDragMode(mode: DragMode): void {
     this.dragMode = mode;
+    this.selectionStrategy = createSelectionStrategy(mode);
   }
 
   public getDragMode(): DragMode {
