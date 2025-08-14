@@ -1,6 +1,7 @@
 import paper from 'paper';
 import { ViewportBounds } from '../types';
-import { RenderingProvider, Point, MouseEvent } from './RenderingProvider';
+import { RenderingProvider, Point, MouseEvent, Shape, SelectionShape, RenderStyle, SelectionStyle } from './RenderingProvider';
+import { lassoContainsShape, pathIntersectsShape } from '../IntersectionHelpers';
 
 export class CanvasRenderingProvider implements RenderingProvider {
   private canvas: HTMLCanvasElement;
@@ -10,6 +11,11 @@ export class CanvasRenderingProvider implements RenderingProvider {
   private mouseUpHandlers: Array<(event: MouseEvent) => void> = [];
   private viewportChangeHandlers: Array<() => void> = [];
   private isInitialized = false;
+  
+  // Internal shape management
+  private zoneShapes: Map<string, paper.Path> = new Map();
+  private selectionShapes: Map<string, paper.Path> = new Map();
+  private nextSelectionId = 0;
 
   constructor(canvas: HTMLCanvasElement, viewportBounds: ViewportBounds) {
     this.canvas = canvas;
@@ -128,6 +134,138 @@ export class CanvasRenderingProvider implements RenderingProvider {
     };
   }
 
+  // Rendering operations
+  clear(): void {
+    paper.project.clear();
+    this.zoneShapes.clear();
+    this.selectionShapes.clear();
+  }
+  
+  update(): void {
+    paper.view.update();
+  }
+  
+  // Zone rendering
+  renderZone(zoneId: string, geometry: { type: 'Point' | 'Polygon'; coordinates: number[] | number[][] }, style: RenderStyle): Shape {
+    // Remove existing shape if it exists
+    const existingShape = this.zoneShapes.get(zoneId);
+    if (existingShape) {
+      existingShape.remove();
+    }
+    
+    let shape: paper.Path;
+
+    if (geometry.type === 'Point') {
+      const [x, y] = geometry.coordinates as number[];
+      const point = this.worldToCanvas(x, y);
+      shape = new paper.Path.Circle(new paper.Point(point.x, point.y), 15);
+    } else {
+      const coords = geometry.coordinates as number[][];
+      shape = new paper.Path();
+      
+      coords.forEach(([x, y], index) => {
+        const point = this.worldToCanvas(x, y);
+        const paperPoint = new paper.Point(point.x, point.y);
+        if (index === 0) {
+          shape.moveTo(paperPoint);
+        } else {
+          shape.lineTo(paperPoint);
+        }
+      });
+      
+      shape.closePath();
+    }
+
+    // Apply style
+    shape.fillColor = new paper.Color(style.fillColor);
+    shape.fillColor.alpha = style.opacity;
+    shape.strokeColor = new paper.Color(style.strokeColor);
+    shape.strokeWidth = style.strokeWidth;
+
+    // Store zone ID for hit detection
+    shape.data = { zoneId };
+    
+    this.zoneShapes.set(zoneId, shape);
+    
+    return { id: zoneId, data: { zoneId } };
+  }
+  
+  removeZone(zoneId: string): void {
+    const shape = this.zoneShapes.get(zoneId);
+    if (shape) {
+      shape.remove();
+      this.zoneShapes.delete(zoneId);
+    }
+  }
+  
+  // Selection shape operations
+  createSelectionShape(type: 'lasso' | 'path', startPoint: Point): SelectionShape {
+    const id = `selection_${this.nextSelectionId++}`;
+    const paperPoint = new paper.Point(startPoint.x, startPoint.y);
+    
+    // Both lasso and path start the same way - as a path
+    const shape = new paper.Path();
+    shape.moveTo(paperPoint);
+    
+    this.selectionShapes.set(id, shape);
+    
+    return {
+      id,
+      type,
+      points: [startPoint]
+    };
+  }
+  
+  updateSelectionShape(shape: SelectionShape, currentPoint: Point, _startPoint: Point): void {
+    const paperShape = this.selectionShapes.get(shape.id);
+    if (!paperShape) return;
+    
+    // Both lasso and path draw the same way - just add points to the path
+    paperShape.lineTo(new paper.Point(currentPoint.x, currentPoint.y));
+    shape.points.push(currentPoint);
+  }
+  
+  completeSelectionShape(shape: SelectionShape, startPoint: Point): void {
+    const paperShape = this.selectionShapes.get(shape.id);
+    if (!paperShape) return;
+    
+    // Check if it's a zero-length drag (single point click)
+    if (shape.points.length === 1) {
+      // Create small circular area for click selection
+      paperShape.remove();
+      const circle = new paper.Path.Circle(new paper.Point(startPoint.x, startPoint.y), 10);
+      this.selectionShapes.set(shape.id, circle);
+    } else if (shape.type === 'lasso') {
+      // Close the lasso path to create an enclosed area
+      paperShape.lineTo(new paper.Point(startPoint.x, startPoint.y));
+      paperShape.closePath();
+    }
+    // Path doesn't close - it remains an open path for intersection testing
+  }
+  
+  removeSelectionShape(shape: SelectionShape): void {
+    const paperShape = this.selectionShapes.get(shape.id);
+    if (paperShape) {
+      paperShape.remove();
+      this.selectionShapes.delete(shape.id);
+    }
+  }
+  
+  applySelectionStyle(shape: SelectionShape, style: SelectionStyle): void {
+    const paperShape = this.selectionShapes.get(shape.id);
+    if (!paperShape) return;
+    
+    paperShape.strokeColor = new paper.Color(style.strokeColor);
+    paperShape.strokeWidth = style.strokeWidth;
+    if (style.dashArray) {
+      paperShape.dashArray = style.dashArray;
+    }
+    if (style.fillColor) {
+      paperShape.fillColor = new paper.Color(style.fillColor);
+    }
+  }
+  
+  // Hit testing
   hitTest(point: Point): string | null {
     if (!paper.project) return null;
     
@@ -135,6 +273,22 @@ export class CanvasRenderingProvider implements RenderingProvider {
     const hitResult = paper.project.hitTest(paperPoint);
     
     return hitResult?.item?.data?.zoneId || null;
+  }
+  
+  // Intersection testing
+  testIntersection(zoneId: string, selectionShape: SelectionShape): boolean {
+    const zoneShape = this.zoneShapes.get(zoneId);
+    const selShape = this.selectionShapes.get(selectionShape.id);
+    
+    if (!zoneShape || !selShape) {
+      return false;
+    }
+    
+    if (selectionShape.type === 'lasso') {
+      return lassoContainsShape(selShape, zoneShape);
+    } else {
+      return pathIntersectsShape(selShape, zoneShape);
+    }
   }
 
   getContainer(): HTMLElement {

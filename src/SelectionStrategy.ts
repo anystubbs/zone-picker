@@ -1,73 +1,66 @@
-import paper from 'paper';
 import { DragMode } from './types';
-import { lassoContainsShape, pathIntersectsShape } from './IntersectionHelpers';
+import { Point, SelectionShape, SelectionStyle, RenderingProvider } from './providers/RenderingProvider';
 
 export interface SelectionStrategy {
-  createShape(start: paper.Point): paper.Path;
-  updateShape(shape: paper.Path, current: paper.Point, start: paper.Point): void;
-  applyStyle(shape: paper.Path, isShift: boolean): void;
-  testIntersection(shape: paper.Path, selection: paper.Path): boolean;
-  completeSelection(shape: paper.Path, start: paper.Point): void;
+  createShape(provider: RenderingProvider, start: Point): SelectionShape;
+  updateShape(provider: RenderingProvider, shape: SelectionShape, current: Point, start: Point): void;
+  applyStyle(provider: RenderingProvider, shape: SelectionShape, isShift: boolean): void;
+  testIntersection(provider: RenderingProvider, zoneId: string, selection: SelectionShape): boolean;
+  completeSelection(provider: RenderingProvider, shape: SelectionShape, start: Point): void;
 }
 
 
 export class LassoSelectionStrategy implements SelectionStrategy {
-  createShape(start: paper.Point): paper.Path {
-    const path = new paper.Path();
-    path.moveTo(start);
-    return path;
+  createShape(provider: RenderingProvider, start: Point): SelectionShape {
+    return provider.createSelectionShape('lasso', start);
   }
 
-  updateShape(shape: paper.Path, current: paper.Point, _start: paper.Point): void {
-    shape.lineTo(current);
+  updateShape(provider: RenderingProvider, shape: SelectionShape, current: Point, start: Point): void {
+    provider.updateSelectionShape(shape, current, start);
   }
 
-  applyStyle(shape: paper.Path, isShift: boolean): void {
-    shape.strokeWidth = 4;
-    shape.dashArray = [8, 4]; // Thick dashed line for lasso area selection
-    
-    shape.strokeColor = isShift 
-      ? new paper.Color(1, 0.2, 0.2)
-      : new paper.Color(0.2, 0.6, 1);
+  applyStyle(provider: RenderingProvider, shape: SelectionShape, isShift: boolean): void {
+    const style: SelectionStyle = {
+      strokeWidth: 4,
+      dashArray: [8, 4], // Thick dashed line for lasso area selection
+      strokeColor: isShift ? '#ff3333' : '#3399ff'
+    };
+    provider.applySelectionStyle(shape, style);
   }
 
-  testIntersection(shape: paper.Path, selection: paper.Path): boolean {
-    return lassoContainsShape(selection, shape);
+  testIntersection(provider: RenderingProvider, zoneId: string, selection: SelectionShape): boolean {
+    return provider.testIntersection(zoneId, selection);
   }
 
-  completeSelection(shape: paper.Path, start: paper.Point): void {
-    // Close the lasso path to create a proper enclosed area
-    shape.lineTo(start);
-    shape.closePath();
+  completeSelection(provider: RenderingProvider, shape: SelectionShape, start: Point): void {
+    provider.completeSelectionShape(shape, start);
   }
 }
 
 export class PathSelectionStrategy implements SelectionStrategy {
-  createShape(start: paper.Point): paper.Path {
-    const path = new paper.Path();
-    path.moveTo(start);
-    return path;
+  createShape(provider: RenderingProvider, start: Point): SelectionShape {
+    return provider.createSelectionShape('path', start);
   }
 
-  updateShape(shape: paper.Path, current: paper.Point, _start: paper.Point): void {
-    shape.lineTo(current);
+  updateShape(provider: RenderingProvider, shape: SelectionShape, current: Point, start: Point): void {
+    provider.updateSelectionShape(shape, current, start);
   }
 
-  applyStyle(shape: paper.Path, isShift: boolean): void {
-    shape.strokeWidth = 3;
-    shape.dashArray = []; // Solid line for path intersection
-    
-    shape.strokeColor = isShift 
-      ? new paper.Color(1, 0.2, 0.2)
-      : new paper.Color(0.2, 0.6, 1);
+  applyStyle(provider: RenderingProvider, shape: SelectionShape, isShift: boolean): void {
+    const style: SelectionStyle = {
+      strokeWidth: 3,
+      dashArray: [], // Solid line for path intersection
+      strokeColor: isShift ? '#ff3333' : '#3399ff'
+    };
+    provider.applySelectionStyle(shape, style);
   }
 
-  testIntersection(shape: paper.Path, selection: paper.Path): boolean {
-    return pathIntersectsShape(selection, shape);
+  testIntersection(provider: RenderingProvider, zoneId: string, selection: SelectionShape): boolean {
+    return provider.testIntersection(zoneId, selection);
   }
 
-  completeSelection(_shape: paper.Path, _start: paper.Point): void {
-    // Path doesn't need completion logic
+  completeSelection(provider: RenderingProvider, shape: SelectionShape, start: Point): void {
+    provider.completeSelectionShape(shape, start);
   }
 }
 

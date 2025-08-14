@@ -19,6 +19,19 @@ export interface SelectionStyle {
   fillColor?: string;
 }
 
+// Generic shape interface for provider-agnostic rendering
+export interface Shape {
+  id: string;
+  data?: any;
+}
+
+// Generic selection shape for drag operations
+export interface SelectionShape {
+  id: string;
+  type: 'lasso' | 'path';
+  points: Point[];
+}
+
 export interface MouseEvent {
   point: Point;
   worldCoordinates: [number, number];
@@ -26,11 +39,11 @@ export interface MouseEvent {
 }
 
 /**
- * Minimal rendering provider interface focused on coordinate transformation
- * and integration points rather than full rendering abstraction
+ * Rendering provider interface that abstracts away Paper.js dependencies
+ * Each provider can implement rendering using its own technology (Canvas2D, WebGL, SVG, etc.)
  */
 export interface RenderingProvider {
-  // Core setup - each provider handles Paper.js setup differently
+  // Core setup
   initialize(): void;
   destroy(): void;
   
@@ -42,7 +55,7 @@ export interface RenderingProvider {
   getViewportBounds(): ViewportBounds;
   setViewportBounds(bounds: ViewportBounds): void;
   
-  // Canvas size for Paper.js calculations
+  // Canvas size for calculations
   getCanvasSize(): { width: number; height: number };
   
   // Event handling integration
@@ -53,9 +66,25 @@ export interface RenderingProvider {
   // Map-specific updates (zoom, pan) - triggers re-render
   onViewportChange(handler: () => void): () => void;
   
-  // Hit testing - provider can optimize this
-  hitTest?(point: Point): string | null; // Optional - falls back to Paper.js
-  
   // Provider-specific canvas/container access
   getContainer(): HTMLElement;
+  
+  // Rendering operations - provider handles the implementation details
+  clear(): void;
+  update(): void;
+  
+  // Zone rendering
+  renderZone(zoneId: string, geometry: { type: 'Point' | 'Polygon'; coordinates: number[] | number[][] }, style: RenderStyle): Shape;
+  removeZone(zoneId: string): void;
+  
+  // Selection shape operations
+  createSelectionShape(type: 'lasso' | 'path', startPoint: Point): SelectionShape;
+  updateSelectionShape(shape: SelectionShape, currentPoint: Point, startPoint: Point): void;
+  completeSelectionShape(shape: SelectionShape, startPoint: Point): void;
+  removeSelectionShape(shape: SelectionShape): void;
+  applySelectionStyle(shape: SelectionShape, style: SelectionStyle): void;
+  
+  // Hit testing and intersection
+  hitTest(point: Point): string | null;
+  testIntersection(zoneId: string, selectionShape: SelectionShape): boolean;
 }

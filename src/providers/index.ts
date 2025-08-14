@@ -1,2 +1,2 @@
 export { CanvasRenderingProvider } from './CanvasRenderingProvider';
-export type { RenderingProvider, MouseEvent } from './RenderingProvider';
+export type { RenderingProvider, MouseEvent, Point, Shape, SelectionShape, RenderStyle, SelectionStyle } from './RenderingProvider';

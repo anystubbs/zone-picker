@@ -1,7 +1,6 @@
-import paper from 'paper';
 import { Zone, ZoneSelectorConfig, DragMode } from './types';
 import { SelectionStrategy, createSelectionStrategy } from './SelectionStrategy';
-import { RenderingProvider, MouseEvent as ProviderMouseEvent } from './providers';
+import { RenderingProvider, MouseEvent as ProviderMouseEvent, Point, SelectionShape, RenderStyle } from './providers';
 
 export class ZoneSelector {
   private zones: Zone[];
@@ -10,14 +9,13 @@ export class ZoneSelector {
   private onSelectionChange?: (selectedZones: Zone[]) => void;
   private onCategoryChange?: (category: string) => void;
   private provider: RenderingProvider;
-  private zoneShapes: Map<string, paper.Path> = new Map();
   private dragMode: DragMode;
   private selectionStrategy: SelectionStrategy;
   
   // Drag selection state
   private isDragging: boolean = false;
-  private dragStart: paper.Point | null = null;
-  private selectionShape: paper.Path | null = null; // Can be rectangle or draw path
+  private dragStart: Point | null = null;
+  private selectionShape: SelectionShape | null = null;
   private clickedZoneId: string | null = null;
   private isShiftPressed: boolean = false;
 
@@ -57,10 +55,10 @@ export class ZoneSelector {
     // Set up provider-based event handlers
     this.provider.onMouseDown((event: ProviderMouseEvent) => {
       // Always prepare for potential drag selection
-      this.dragStart = new paper.Point(event.point.x, event.point.y);
+      this.dragStart = { x: event.point.x, y: event.point.y };
       
       // Store potential zone click for later
-      const clickedZoneId = this.provider.hitTest?.(event.point) || null;
+      const clickedZoneId = this.provider.hitTest(event.point);
       
       // Store the clicked zone ID for mouse up handling
       this.clickedZoneId = clickedZoneId;
@@ -74,7 +72,7 @@ export class ZoneSelector {
       }
       
       if (this.isDragging && this.dragStart && this.selectionShape) {
-        this.updateSelectionShape(new paper.Point(event.point.x, event.point.y));
+        this.updateSelectionShape({ x: event.point.x, y: event.point.y });
       }
     });
 
@@ -84,7 +82,7 @@ export class ZoneSelector {
         this.completeDragSelection();
         
         // Clean up drag selection
-        this.selectionShape.remove();
+        this.provider.removeSelectionShape(this.selectionShape);
         this.selectionShape = null;
       } else if (!this.isDragging && this.clickedZoneId) {
         // Handle single zone click (no drag occurred)
@@ -105,86 +103,48 @@ export class ZoneSelector {
 
   private render(): void {
     // Clear existing shapes
-    paper.project.clear();
-    this.zoneShapes.clear();
+    this.provider.clear();
 
     // Only render zones from current category
     const currentZones = this.zones.filter(zone => zone.category === this.currentCategory);
     
     console.log('Rendering', currentZones.length, 'zones from category:', this.currentCategory);
-    console.log('Viewport bounds:', this.provider.getViewportBounds());
-    console.log('Canvas size:', this.provider.getCanvasSize());
     
     currentZones.forEach(zone => {
       this.renderZone(zone);
     });
 
-    paper.view.update();
+    this.provider.update();
   }
 
   private renderZone(zone: Zone): void {
-    // Remove existing shape if it exists
-    const existingShape = this.zoneShapes.get(zone.id);
-    if (existingShape) {
-      existingShape.remove();
-    }
+    const style: RenderStyle = {
+      fillColor: zone.selected ? '#3399ff' : '#cccccc',
+      strokeColor: '#333333',
+      strokeWidth: 2,
+      opacity: zone.selected ? 0.6 : 0.3
+    };
     
-    let shape: paper.Path;
-
-    if (zone.geometry.type === 'Point') {
-      const [x, y] = zone.geometry.coordinates as number[];
-      const point = this.provider.worldToCanvas(x, y);
-      console.log('Point zone:', zone.id, 'coords:', [x, y], 'canvas:', point);
-      shape = new paper.Path.Circle(new paper.Point(point.x, point.y), 15);
-    } else {
-      const coords = zone.geometry.coordinates as number[][]; // Polygon: [points][x,y]
-      shape = new paper.Path();
-      
-      console.log('Polygon zone:', zone.id, 'first coord:', coords[0]);
-      
-      coords.forEach(([x, y], index) => {
-        const point = this.provider.worldToCanvas(x, y);
-        const paperPoint = new paper.Point(point.x, point.y);
-        if (index === 0) {
-          shape.moveTo(paperPoint);
-        } else {
-          shape.lineTo(paperPoint);
-        }
-      });
-      
-      shape.closePath();
-    }
-
-    // Style the zone based on selection state
-    shape.fillColor = zone.selected 
-      ? new paper.Color(0.2, 0.6, 1, 0.6) 
-      : new paper.Color(0.8, 0.8, 0.8, 0.3);
     
-    shape.strokeColor = new paper.Color(0.2, 0.2, 0.2);
-    shape.strokeWidth = 2;
-
-    // Store zone ID for hit detection
-    shape.data = { zoneId: zone.id };
-    
-    this.zoneShapes.set(zone.id, shape);
+    this.provider.renderZone(zone.id, zone.geometry, style);
   }
 
   private createSelectionShape(): void {
-    this.selectionShape = this.selectionStrategy.createShape(this.dragStart!);
-    this.selectionStrategy.applyStyle(this.selectionShape, this.isShiftPressed);
+    this.selectionShape = this.selectionStrategy.createShape(this.provider, this.dragStart!);
+    this.selectionStrategy.applyStyle(this.provider, this.selectionShape, this.isShiftPressed);
   }
   
-  private updateSelectionShape(currentPoint: paper.Point): void {
+  private updateSelectionShape(currentPoint: Point): void {
     if (!this.selectionShape || !this.dragStart) return;
     
-    this.selectionStrategy.updateShape(this.selectionShape, currentPoint, this.dragStart);
-    this.selectionStrategy.applyStyle(this.selectionShape, this.isShiftPressed);
+    this.selectionStrategy.updateShape(this.provider, this.selectionShape, currentPoint, this.dragStart);
+    this.selectionStrategy.applyStyle(this.provider, this.selectionShape, this.isShiftPressed);
   }
 
   private completeDragSelection(): void {
     if (!this.selectionShape || !this.dragStart) return;
     
-    this.selectionStrategy.completeSelection(this.selectionShape, this.dragStart);
+    this.selectionStrategy.completeSelection(this.provider, this.selectionShape, this.dragStart);
     
     if (this.isShiftPressed) {
       console.log('Shift+drag detected - deselecting zones');
@@ -195,16 +155,15 @@ export class ZoneSelector {
     }
   }
   
-  private selectZonesInShape(selectionShape: paper.Path): void {
+  private selectZonesInShape(selectionShape: SelectionShape): void {
     const currentZones = this.zones.filter(zone => zone.category === this.currentCategory);
     let selectionChanged = false;
     
     currentZones.forEach(zone => {
-      const shape = this.zoneShapes.get(zone.id);
-      if (shape && this.shapeIntersectsSelection(shape, selectionShape) && !zone.selected) {
+      if (this.shapeIntersectsSelection(zone.id, selectionShape) && !zone.selected) {
         zone.selected = true;
         selectionChanged = true;
-        shape.fillColor = new paper.Color(0.2, 0.6, 1, 0.6);
+        this.renderZone(zone); // Re-render with selected style
       }
     });
     
@@ -214,16 +173,15 @@ export class ZoneSelector {
     }
   }
   
-  private deselectZonesInShape(selectionShape: paper.Path): void {
+  private deselectZonesInShape(selectionShape: SelectionShape): void {
     const currentZones = this.zones.filter(zone => zone.category === this.currentCategory);
     let selectionChanged = false;
     
     currentZones.forEach(zone => {
-      const shape = this.zoneShapes.get(zone.id);
-      if (shape && this.shapeIntersectsSelection(shape, selectionShape) && zone.selected) {
+      if (this.shapeIntersectsSelection(zone.id, selectionShape) && zone.selected) {
         zone.selected = false;
         selectionChanged = true;
-        shape.fillColor = new paper.Color(0.8, 0.8, 0.8, 0.3);
+        this.renderZone(zone); // Re-render with unselected style
       }
     });
     
@@ -233,8 +191,8 @@ export class ZoneSelector {
     }
   }
   
-  private shapeIntersectsSelection(shape: paper.Path, selectionShape: paper.Path): boolean {
-    return this.selectionStrategy.testIntersection(shape, selectionShape);
+  private shapeIntersectsSelection(zoneId: string, selectionShape: SelectionShape): boolean {
+    return this.selectionStrategy.testIntersection(this.provider, zoneId, selectionShape);
   }
 
   public toggleZoneSelection(zoneId: string): void {
@@ -304,7 +262,6 @@ export class ZoneSelector {
   public destroy(): void {
     // Clean up provider
     this.provider.destroy();
-    this.zoneShapes.clear();
     
     // Clean up event listeners
     document.removeEventListener('keydown', this.handleKeyDown);
