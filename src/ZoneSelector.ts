@@ -1,6 +1,6 @@
 import paper from 'paper';
 import { Zone, ZoneSelectorConfig, ViewportBounds, DragMode } from './types';
-import { worldToCanvas } from './geometry/IntersectionHelpers';
+import { worldToCanvas } from './IntersectionHelpers';
 import { SelectionStrategy, createSelectionStrategy } from './SelectionStrategy';
 
 export class ZoneSelector {
@@ -233,6 +233,9 @@ export class ZoneSelector {
   public toggleZoneSelection(zoneId: string): void {
     const zone = this.zones.find(z => z.id === zoneId);
     if (!zone) return;
+
+    // Only allow toggling zones in the current category (visible zones)
+    if (zone.category !== this.currentCategory) return;
 
     zone.selected = !zone.selected;
     

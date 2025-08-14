@@ -1,6 +1,6 @@
 import paper from 'paper';
 import { DragMode } from './types';
-import { lassoContainsShape, pathIntersectsShape } from './geometry/IntersectionHelpers';
+import { lassoContainsShape, pathIntersectsShape } from './IntersectionHelpers';
 
 export interface SelectionStrategy {
   createShape(start: paper.Point): paper.Path;
