@@ -1,5 +1,5 @@
 import paper from 'paper';
-import { ViewportBounds } from '../types';
+import { ViewportBounds } from './types';
 
 /**
  * Pure geometry helper functions for zone selection calculations.

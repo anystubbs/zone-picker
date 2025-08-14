@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import paper from 'paper';
 import { ZoneSelector } from '../src/ZoneSelector';
+import { CanvasRenderingProvider } from '../src/CanvasRenderingProvider';
 import { Zone, ViewportBounds } from '../src/types';
 
 describe('ZoneSelector', () => {
@@ -58,10 +59,10 @@ describe('ZoneSelector', () => {
       const onSelectionChange = vi.fn();
       const onCategoryChange = vi.fn();
 
+      const provider = new CanvasRenderingProvider(canvas, viewport);
       selector = new ZoneSelector({
-        canvas,
+        provider,
         zones: mockZones,
-        viewport,
         dragMode: 'lasso',
         onSelectionChange,
         onCategoryChange
@@ -72,22 +73,20 @@ describe('ZoneSelector', () => {
       expect(selector.getCurrentCategory()).toBe('h3-3');
     });
 
-    it('should default to rectangle drag mode', () => {
+    it('should default to lasso drag mode', () => {
       selector = new ZoneSelector({
-        canvas,
-        zones: mockZones,
-        viewport
+        provider: new CanvasRenderingProvider(canvas, viewport),
+        zones: mockZones
       });
 
-      expect(selector.getDragMode()).toBe('rectangle');
+      expect(selector.getDragMode()).toBe('lasso');
     });
 
     it('should handle empty zones array gracefully', () => {
       expect(() => {
         selector = new ZoneSelector({
-          canvas,
-          zones: [],
-          viewport
+          provider: new CanvasRenderingProvider(canvas, viewport),
+          zones: []
         });
       }).not.toThrow();
 
@@ -99,18 +98,16 @@ describe('ZoneSelector', () => {
   describe('Zone Selection Behavior', () => {
     beforeEach(() => {
       selector = new ZoneSelector({
-        canvas,
-        zones: mockZones,
-        viewport
+        provider: new CanvasRenderingProvider(canvas, viewport),
+        zones: mockZones
       });
     });
 
     it('should toggle zone selection on click', () => {
       const onSelectionChange = vi.fn();
       selector = new ZoneSelector({
-        canvas,
+        provider: new CanvasRenderingProvider(canvas, viewport),
         zones: mockZones,
-        viewport,
         onSelectionChange
       });
 
@@ -160,9 +157,8 @@ describe('ZoneSelector', () => {
     beforeEach(() => {
       onSelectionChange = vi.fn();
       selector = new ZoneSelector({
-        canvas,
+        provider: new CanvasRenderingProvider(canvas, viewport),
         zones: mockZones,
-        viewport,
         onSelectionChange
       });
     });
@@ -217,9 +213,8 @@ describe('ZoneSelector', () => {
     beforeEach(() => {
       onCategoryChange = vi.fn();
       selector = new ZoneSelector({
-        canvas,
+        provider: new CanvasRenderingProvider(canvas, viewport),
         zones: mockZones,
-        viewport,
         onCategoryChange
       });
     });
@@ -254,29 +249,27 @@ describe('ZoneSelector', () => {
   describe('Drag Mode Management', () => {
     beforeEach(() => {
       selector = new ZoneSelector({
-        canvas,
-        zones: mockZones,
-        viewport
+        provider: new CanvasRenderingProvider(canvas, viewport),
+        zones: mockZones
       });
     });
 
     it('should change drag modes', () => {
-      expect(selector.getDragMode()).toBe('rectangle');
-
-      selector.setDragMode('lasso');
       expect(selector.getDragMode()).toBe('lasso');
 
       selector.setDragMode('path');
       expect(selector.getDragMode()).toBe('path');
+
+      selector.setDragMode('lasso');
+      expect(selector.getDragMode()).toBe('lasso');
     });
   });
 
   describe('Shift Key State', () => {
     beforeEach(() => {
       selector = new ZoneSelector({
-        canvas,
-        zones: mockZones,
-        viewport
+        provider: new CanvasRenderingProvider(canvas, viewport),
+        zones: mockZones
       });
     });
 
@@ -322,9 +315,8 @@ describe('ZoneSelector', () => {
 
       expect(() => {
         selector = new ZoneSelector({
-          canvas,
-          zones: mixedZones,
-          viewport
+          provider: new CanvasRenderingProvider(canvas, viewport),
+          zones: mixedZones
         });
       }).not.toThrow();
 
@@ -345,9 +337,8 @@ describe('ZoneSelector', () => {
 
       expect(() => {
         selector = new ZoneSelector({
-          canvas,
-          zones: largeZoneSet,
-          viewport: { minX: -10, maxX: 110, minY: -10, maxY: 110 }
+          provider: new CanvasRenderingProvider(canvas, { minX: -10, maxX: 110, minY: -10, maxY: 110 }),
+          zones: largeZoneSet
         });
       }).not.toThrow();
 
@@ -358,9 +349,8 @@ describe('ZoneSelector', () => {
   describe('Cleanup', () => {
     beforeEach(() => {
       selector = new ZoneSelector({
-        canvas,
-        zones: mockZones,
-        viewport
+        provider: new CanvasRenderingProvider(canvas, viewport),
+        zones: mockZones
       });
     });
 

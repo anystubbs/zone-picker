@@ -1,7 +1,7 @@
 import paper from 'paper';
-import { Zone, ZoneSelectorConfig, ViewportBounds, DragMode } from './types';
-import { worldToCanvas } from './IntersectionHelpers';
+import { Zone, ZoneSelectorConfig, DragMode } from './types';
 import { SelectionStrategy, createSelectionStrategy } from './SelectionStrategy';
+import { RenderingProvider, MouseEvent as ProviderMouseEvent } from './RenderingProvider';
 
 export class ZoneSelector {
   private zones: Zone[];
@@ -9,7 +9,7 @@ export class ZoneSelector {
   private categories: string[];
   private onSelectionChange?: (selectedZones: Zone[]) => void;
   private onCategoryChange?: (category: string) => void;
-  private viewportBounds: ViewportBounds;
+  private provider: RenderingProvider;
   private zoneShapes: Map<string, paper.Path> = new Map();
   private dragMode: DragMode;
   private selectionStrategy: SelectionStrategy;
@@ -25,16 +25,16 @@ export class ZoneSelector {
     this.zones = [...config.zones];
     this.onSelectionChange = config.onSelectionChange;
     this.onCategoryChange = config.onCategoryChange;
-    this.viewportBounds = config.viewport;
-    this.dragMode = config.dragMode || 'rectangle';
+    this.provider = config.provider;
+    this.dragMode = config.dragMode || 'lasso';
     this.selectionStrategy = createSelectionStrategy(this.dragMode);
     
     // Extract unique categories
     this.categories = [...new Set(this.zones.map(zone => zone.category))];
     this.currentCategory = this.categories[0] || '';
     
-    // Initialize Paper.js with the provided canvas
-    paper.setup(config.canvas);
+    // Initialize the rendering provider
+    this.provider.initialize();
     
     // Initial render
     this.render();
@@ -49,23 +49,24 @@ export class ZoneSelector {
     document.addEventListener('keydown', this.handleKeyDown);
     document.addEventListener('keyup', this.handleKeyUp);
     
-    // Also make the canvas focusable and give it focus
-    paper.view.element.setAttribute('tabindex', '0');
-    paper.view.element.focus();
+    // Make the provider's container focusable
+    const container = this.provider.getContainer();
+    container.setAttribute('tabindex', '0');
+    container.focus();
     
-    paper.view.onMouseDown = (event: paper.MouseEvent) => {
+    // Set up provider-based event handlers
+    this.provider.onMouseDown((event: ProviderMouseEvent) => {
       // Always prepare for potential drag selection
-      this.dragStart = event.point.clone();
+      this.dragStart = new paper.Point(event.point.x, event.point.y);
       
       // Store potential zone click for later
-      const hitResult = paper.project.hitTest(event.point);
-      const clickedZoneId = hitResult?.item?.data.zoneId || null;
+      const clickedZoneId = this.provider.hitTest?.(event.point) || null;
       
       // Store the clicked zone ID for mouse up handling
       this.clickedZoneId = clickedZoneId;
-    };
+    });
 
-    paper.view.onMouseDrag = (event: paper.MouseEvent) => {
+    this.provider.onMouseMove((event: ProviderMouseEvent) => {
       if (!this.isDragging && this.dragStart) {
         // Start drag selection on first drag movement
         this.isDragging = true;
@@ -73,11 +74,11 @@ export class ZoneSelector {
       }
       
       if (this.isDragging && this.dragStart && this.selectionShape) {
-        this.updateSelectionShape(event.point);
+        this.updateSelectionShape(new paper.Point(event.point.x, event.point.y));
       }
-    };
+    });
 
-    paper.view.onMouseUp = (_event: paper.MouseEvent) => {
+    this.provider.onMouseUp((_event: ProviderMouseEvent) => {
       if (this.isDragging && this.dragStart && this.selectionShape) {
         // Complete drag selection
         this.completeDragSelection();
@@ -94,7 +95,12 @@ export class ZoneSelector {
       this.isDragging = false;
       this.dragStart = null;
       this.clickedZoneId = null;
-    };
+    });
+
+    // Handle viewport changes (zoom, pan, resize)
+    this.provider.onViewportChange(() => {
+      this.render(); // Re-render all zones when viewport changes
+    });
   }
 
   private render(): void {
@@ -106,8 +112,8 @@ export class ZoneSelector {
     const currentZones = this.zones.filter(zone => zone.category === this.currentCategory);
     
     console.log('Rendering', currentZones.length, 'zones from category:', this.currentCategory);
-    console.log('Viewport bounds:', this.viewportBounds);
-    console.log('Canvas size:', paper.view.size);
+    console.log('Viewport bounds:', this.provider.getViewportBounds());
+    console.log('Canvas size:', this.provider.getCanvasSize());
     
     currentZones.forEach(zone => {
       this.renderZone(zone);
@@ -127,9 +133,9 @@ export class ZoneSelector {
 
     if (zone.geometry.type === 'Point') {
       const [x, y] = zone.geometry.coordinates as number[];
-      const point = worldToCanvas(x, y, this.viewportBounds, paper.view.size);
+      const point = this.provider.worldToCanvas(x, y);
       console.log('Point zone:', zone.id, 'coords:', [x, y], 'canvas:', point);
-      shape = new paper.Path.Circle(point, 15);
+      shape = new paper.Path.Circle(new paper.Point(point.x, point.y), 15);
     } else {
       const coords = zone.geometry.coordinates as number[][]; // Polygon: [points][x,y]
       shape = new paper.Path();
@@ -137,11 +143,12 @@ export class ZoneSelector {
       console.log('Polygon zone:', zone.id, 'first coord:', coords[0]);
       
       coords.forEach(([x, y], index) => {
-        const point = worldToCanvas(x, y, this.viewportBounds, paper.view.size);
+        const point = this.provider.worldToCanvas(x, y);
+        const paperPoint = new paper.Point(point.x, point.y);
         if (index === 0) {
-          shape.moveTo(point);
+          shape.moveTo(paperPoint);
         } else {
-          shape.lineTo(point);
+          shape.lineTo(paperPoint);
         }
       });
       
@@ -295,7 +302,8 @@ export class ZoneSelector {
   }
 
   public destroy(): void {
-    paper.project.clear();
+    // Clean up provider
+    this.provider.destroy();
     this.zoneShapes.clear();
     
     // Clean up event listeners

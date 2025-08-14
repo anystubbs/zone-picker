@@ -9,12 +9,22 @@ Building a TypeScript frontend library for interactive geographic zone selection
 - [ ] Voronoi diagram generation for point zones
 - [ ] Territory boundary creation using Paper.js paths
 
-## Phase 6: Library Packaging 🎯 PENDING
+## Phase 6: Rendering Abstraction Layer 🎯 FUTURE
+- [ ] Create `RenderingProvider` interface for multiple rendering backends
+- [ ] Abstract coordinate transformation and viewport management  
+- [ ] Implement `CanvasRenderingProvider` (current Paper.js implementation)
+- [ ] Implement `LeafletRenderingProvider` for Leaflet map integration
+- [ ] Implement `GoogleMapsRenderingProvider` for Google Maps integration
+- [ ] Update ZoneSelector to accept RenderingProvider instead of raw canvas
+- [ ] Design provider-agnostic event handling system
+- [ ] Ensure selection strategies work across all providers
+
+## Phase 7: Library Packaging 🎯 PENDING
 - [ ] Bundle optimization (tree-shakeable)
 - [ ] Type definitions export
 - [ ] Documentation and examples
 - [ ] NPM package preparation
-- [ ] Unit test coverage
+- [x] Unit test coverage (39 tests: IntersectionHelpers, SelectionStrategy, ZoneSelector)
 
 ## Technical Stack
 - **Language**: TypeScript

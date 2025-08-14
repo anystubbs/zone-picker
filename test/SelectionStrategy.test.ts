@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import paper from 'paper';
 import { 
-  RectangleSelectionStrategy, 
   LassoSelectionStrategy, 
   PathSelectionStrategy,
   createSelectionStrategy 
@@ -14,10 +13,6 @@ describe('SelectionStrategy', () => {
   });
 
   describe('createSelectionStrategy', () => {
-    it('should create RectangleSelectionStrategy for rectangle mode', () => {
-      const strategy = createSelectionStrategy('rectangle');
-      expect(strategy).toBeInstanceOf(RectangleSelectionStrategy);
-    });
 
     it('should create LassoSelectionStrategy for lasso mode', () => {
       const strategy = createSelectionStrategy('lasso');
@@ -30,40 +25,6 @@ describe('SelectionStrategy', () => {
     });
   });
 
-  describe('RectangleSelectionStrategy', () => {
-    const strategy = new RectangleSelectionStrategy();
-    const start = new paper.Point(10, 10);
-
-    it('should create rectangle shape', () => {
-      const shape = strategy.createShape(start);
-      expect(shape).toBeInstanceOf(paper.Path);
-    });
-
-    it('should apply rectangle styling', () => {
-      const shape = strategy.createShape(start);
-      strategy.applyStyle(shape, false);
-      
-      expect(shape.strokeWidth).toBe(2);
-      expect(shape.dashArray).toEqual([5, 5]);
-    });
-
-    it('should apply red styling when shift is pressed', () => {
-      const shape = strategy.createShape(start);
-      strategy.applyStyle(shape, true);
-      
-      expect(shape.strokeColor?.red).toBe(1);
-      expect(shape.strokeColor?.green).toBe(0.2);
-      expect(shape.strokeColor?.blue).toBe(0.2);
-    });
-
-    it('should test intersection using bounds', () => {
-      const selection = new paper.Path.Rectangle(new paper.Point(0, 0), new paper.Point(50, 50));
-      const shape = new paper.Path.Circle(new paper.Point(25, 25), 10);
-      
-      const result = strategy.testIntersection(shape, selection);
-      expect(result).toBe(true);
-    });
-  });
 
   describe('LassoSelectionStrategy', () => {
     const strategy = new LassoSelectionStrategy();

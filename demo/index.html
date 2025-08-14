@@ -54,7 +54,6 @@
         
         <h3>Drag Mode:</h3>
         <div id="drag-mode-buttons">
-            <button id="rectangle-mode" onclick="setDragMode('rectangle')">Rectangle Selection</button>
             <button id="lasso-mode" onclick="setDragMode('lasso')">Lasso Selection</button>
             <button id="path-mode" onclick="setDragMode('path')">Path Intersection</button>
         </div>
@@ -72,7 +71,7 @@
     </div>
 
     <script type="module">
-        import { ZoneSelector } from '../dist/index.esm.js';
+        import { ZoneSelector, CanvasRenderingProvider } from '../dist/index.esm.js';
         import { seedZones, viewportBounds } from './demoData.js';
 
         // Use real hexagon data
@@ -136,11 +135,13 @@
         let zoneSelector;
         
         function initZoneSelector() {
+            // Create Canvas rendering provider
+            const provider = new CanvasRenderingProvider(canvas, viewportBounds);
+            
             zoneSelector = new ZoneSelector({
-                canvas: canvas,
+                provider: provider,
                 zones: seedZones,
-                viewport: viewportBounds,
-                dragMode: 'rectangle', // Default to rectangle mode
+                dragMode: 'lasso', // Default to lasso mode
                 onSelectionChange: updateSelectedZones,
                 onCategoryChange: updateActiveCategory
             });
@@ -149,7 +150,7 @@
             generateCategoryButtons();
             
             // Set initial drag mode button state
-            document.getElementById('rectangle-mode').classList.add('active');
+            document.getElementById('lasso-mode').classList.add('active');
         }
 
         function generateCategoryButtons() {
