@@ -51,6 +51,13 @@
         <div id="category-buttons">
             <!-- Buttons will be generated dynamically -->
         </div>
+        
+        <h3>Drag Mode:</h3>
+        <div id="drag-mode-buttons">
+            <button id="rectangle-mode" onclick="setDragMode('rectangle')">Rectangle Selection</button>
+            <button id="lasso-mode" onclick="setDragMode('lasso')">Lasso Selection</button>
+            <button id="path-mode" onclick="setDragMode('path')">Path Intersection</button>
+        </div>
     </div>
     
     <canvas id="map-canvas" width="800" height="600"></canvas>
@@ -133,12 +140,16 @@
                 canvas: canvas,
                 zones: seedZones,
                 viewport: viewportBounds,
+                dragMode: 'rectangle', // Default to rectangle mode
                 onSelectionChange: updateSelectedZones,
                 onCategoryChange: updateActiveCategory
             });
             
             // Generate category buttons
             generateCategoryButtons();
+            
+            // Set initial drag mode button state
+            document.getElementById('rectangle-mode').classList.add('active');
         }
 
         function generateCategoryButtons() {
@@ -181,6 +192,16 @@
 
         window.clearSelection = function() {
             zoneSelector.clearSelection();
+        };
+
+        window.setDragMode = function(mode) {
+            zoneSelector.setDragMode(mode);
+            
+            // Update button states
+            const buttons = document.querySelectorAll('#drag-mode-buttons button');
+            buttons.forEach(button => {
+                button.classList.toggle('active', button.id === mode + '-mode');
+            });
         };
 
         // Initialize when page loads

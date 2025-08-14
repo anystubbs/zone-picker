@@ -9,10 +9,13 @@ export interface Zone {
   selected: boolean;
 }
 
+export type DragMode = 'rectangle' | 'lasso' | 'path';
+
 export interface ZoneSelectorConfig {
   canvas: HTMLCanvasElement;
   zones: Zone[];
   viewport: ViewportBounds;
+  dragMode?: DragMode; // Default: 'rectangle'
   onSelectionChange?: (selectedZones: Zone[]) => void;
   onCategoryChange?: (category: string) => void;
 }

@@ -1,5 +1,5 @@
 {
-  "name": "secret-garden",
+  "name": "zone-picker",
   "version": "0.1.0",
   "type": "module",
   "description": "Interactive geographic zone selection library using Paper.js",
