@@ -87,4 +87,7 @@ export interface RenderingProvider {
   // Hit testing and intersection
   hitTest(point: Point): string | null;
   testIntersection(zoneId: string, selectionShape: SelectionShape): boolean;
+  
+  // Optional zoom level for variant switching
+  getZoomLevel?(): number;
 }

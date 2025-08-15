@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zone Selector Demo - Leaflet + Pixi</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #leaflet-map {
+            height: 600px;
+            width: 800px;
+            border: 1px solid #ccc;
+            margin: 20px 0;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        .controls button {
+            margin-right: 10px;
+            padding: 8px 16px;
+            cursor: pointer;
+        }
+        .controls button.active {
+            background-color: #0066cc;
+            color: white;
+        }
+        .selected-zones {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+        .zone-list {
+            list-style: none;
+            padding: 0;
+        }
+        .zone-list li {
+            padding: 4px 8px;
+            margin: 2px 0;
+            background-color: white;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Zone Selector Library Demo - Leaflet + Pixi</h1>
+    
+    <div class="controls">
+        <h3>Categories:</h3>
+        <div id="category-buttons">
+            <!-- Buttons will be generated dynamically -->
+        </div>
+        
+        
+        <h3>Drag Mode:</h3>
+        <div id="drag-mode-buttons">
+            <button id="lasso-mode" onclick="setDragMode('lasso')">Lasso Selection</button>
+            <button id="path-mode" onclick="setDragMode('path')">Path Intersection</button>
+        </div>
+    </div>
+    
+    <div id="leaflet-map"></div>
+    
+    <button onclick="clearSelection()">Clear All Selections</button>
+    
+    <div class="selected-zones">
+        <h3>Selected Zones:</h3>
+        <ul id="selected-list" class="zone-list">
+            <!-- Selected zones will appear here -->
+        </ul>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script type="module">
+        import { ZoneSelector, LeafletRenderingProvider, Zone } from '../dist/index.esm.js';
+        import { seedZones, viewportBounds } from './demoData.js';
+
+        // Get map container element
+        const mapContainer = document.getElementById('leaflet-map');
+        
+        // Initialize zone selector
+        let zoneSelector;
+        
+        function initZoneSelector() {
+            // Convert raw data to Zone instances
+            const convertedZones = seedZones.map(zoneData => new Zone({
+                id: zoneData.id,
+                name: zoneData.name,
+                category: zoneData.category,
+                variant: zoneData.variant,
+                geometry: zoneData.geometry
+            }));
+            
+            // Dynamically collect category/variant pairs from data
+            const categoryVariantMap = new Map();
+            convertedZones.forEach(zone => {
+                if (!categoryVariantMap.has(zone.category)) {
+                    categoryVariantMap.set(zone.category, new Set());
+                }
+                categoryVariantMap.get(zone.category).add(zone.variant);
+            });
+            
+            // Generate category configurations with zoom-based auto-switching
+            const categoryConfigs = Array.from(categoryVariantMap.entries()).map(([category, variants]) => {
+                const variantArray = Array.from(variants).sort();
+                
+                // Define zoom ranges based on category and variant
+                const getVariantConfig = (category, variant) => {
+                    if (category === 'countries') {
+                        return { id: variant, minZoom: 0, maxZoom: 18 };
+                    } else if (category === 'h3') {
+                        const level = parseInt(variant);
+                        const zoomRanges = {
+                            3: { minZoom: 0, maxZoom: 4 },
+                            4: { minZoom: 3, maxZoom: 6 },
+                            5: { minZoom: 5, maxZoom: 8 },
+                            6: { minZoom: 7, maxZoom: 18 }
+                        };
+                        return { id: variant, ...zoomRanges[level] };
+                    }
+                    return { id: variant, minZoom: 0, maxZoom: 18 };
+                };
+                
+                return {
+                    id: category,
+                    autoSwitch: category === 'h3' && variantArray.length > 1,
+                    variants: variantArray.map(variant => getVariantConfig(category, variant))
+                };
+            });
+            
+            // Create Leaflet rendering provider
+            const provider = new LeafletRenderingProvider(mapContainer);
+            
+            zoneSelector = new ZoneSelector({
+                provider: provider,
+                zones: convertedZones,
+                categories: categoryConfigs,
+                dragMode: 'lasso', // Default to lasso mode
+                onSelectionChange: updateSelectedZones,
+                onCategoryChange: updateActiveCategory
+            });
+            
+            // Add zoom change logging to debug variant switching
+            provider.onViewportChange(() => {
+                const zoom = provider.getZoomLevel();
+                const category = zoneSelector.getCurrentCategory();
+                const variant = zoneSelector.getCurrentVariant();
+                console.log(`Zoom change: ${zoom} | Category: ${category}, Variant: ${variant}`);
+            });
+            
+            // Set viewport bounds to fit the zones
+            console.log('viewportBounds available:', viewportBounds);
+            if (viewportBounds) {
+                provider.setViewportBounds(viewportBounds);
+            } else {
+                console.error('viewportBounds not available!');
+            }
+            
+            // Generate category buttons
+            generateCategoryButtons();
+            
+            // Set initial drag mode button state
+            document.getElementById('lasso-mode').classList.add('active');
+        }
+
+        function generateCategoryButtons() {
+            const buttonContainer = document.getElementById('category-buttons');
+            const categories = zoneSelector.getCategories();
+            
+            categories.forEach(category => {
+                const button = document.createElement('button');
+                button.textContent = category;
+                button.onclick = () => {
+                    zoneSelector.setCategory(category);
+                };
+                
+                if (category === zoneSelector.getCurrentCategory()) {
+                    button.classList.add('active');
+                }
+                
+                buttonContainer.appendChild(button);
+            });
+        }
+
+        function updateSelectedZones(selectedZones) {
+            const list = document.getElementById('selected-list');
+            list.innerHTML = '';
+            
+            selectedZones.forEach(zone => {
+                const li = document.createElement('li');
+                li.textContent = `${zone.name} (${zone.category})`;
+                list.appendChild(li);
+            });
+        }
+
+        function updateActiveCategory(category, variant) {
+            // Update button states
+            const buttons = document.querySelectorAll('#category-buttons button');
+            buttons.forEach(button => {
+                button.classList.toggle('active', button.textContent === category);
+            });
+            
+            // Get current zoom level for debugging
+            const currentZoom = zoneSelector.provider.getZoomLevel ? zoneSelector.provider.getZoomLevel() : 'unknown';
+            
+            // Show current variant info with zoom level
+            console.log(`Zoom: ${currentZoom} | Category: ${category}, Variant: ${variant}`);
+        }
+
+        window.clearSelection = function() {
+            zoneSelector.clearSelection();
+        };
+
+        window.setDragMode = function(mode) {
+            zoneSelector.setDragMode(mode);
+            
+            // Update button states
+            const buttons = document.querySelectorAll('#drag-mode-buttons button');
+            buttons.forEach(button => {
+                button.classList.toggle('active', button.id === mode + '-mode');
+            });
+        };
+
+        // Initialize when page loads
+        window.addEventListener('load', () => {
+            console.log('Page loaded, initializing Leaflet demo...');
+            initZoneSelector();
+        });
+    </script>
+</body>
+</html>

@@ -1,13 +1,15 @@
-import { Zone, ZoneSelectorConfig, DragMode } from './types';
+import { Zone, ZoneSelectorConfig, DragMode, CategoryConfig } from './types';
 import { SelectionStrategy, createSelectionStrategy } from './SelectionStrategy';
 import { RenderingProvider, MouseEvent as ProviderMouseEvent, Point, SelectionShape, RenderStyle } from './providers';
 
 export class ZoneSelector {
   private zones: Zone[];
   private currentCategory: string;
+  private currentVariant: string = '';
   private categories: string[];
+  private categoryConfigs: Map<string, CategoryConfig>;
   private onSelectionChange?: (selectedZones: Zone[]) => void;
-  private onCategoryChange?: (category: string) => void;
+  private onCategoryChange?: (category: string, variant: string) => void;
   private provider: RenderingProvider;
   private dragMode: DragMode;
   private selectionStrategy: SelectionStrategy;
@@ -27,9 +29,18 @@ export class ZoneSelector {
     this.dragMode = config.dragMode || 'lasso';
     this.selectionStrategy = createSelectionStrategy(this.dragMode);
     
+    // Set up category configs
+    this.categoryConfigs = new Map();
+    if (config.categories) {
+      config.categories.forEach(c => this.categoryConfigs.set(c.id, c));
+    }
+    
     // Extract unique categories
     this.categories = [...new Set(this.zones.map(zone => zone.category))];
     this.currentCategory = this.categories[0] || '';
+    
+    // Set initial variant for current category
+    this.updateVariantForZoom();
     
     // Initialize the rendering provider
     this.provider.initialize();
@@ -97,7 +108,11 @@ export class ZoneSelector {
 
     // Handle viewport changes (zoom, pan, resize)
     this.provider.onViewportChange(() => {
-      this.render(); // Re-render all zones when viewport changes
+      // Check if we need to switch variants based on zoom
+      this.updateVariantForZoom();
+      
+      // Re-render (with viewport culling)
+      this.render();
     });
   }
 
@@ -105,12 +120,27 @@ export class ZoneSelector {
     // Clear existing shapes
     this.provider.clear();
 
-    // Only render zones from current category
-    const currentZones = this.zones.filter(zone => zone.category === this.currentCategory);
+    // Get viewport bounds for culling
+    const viewportBounds = this.provider.getViewportBounds();
     
-    console.log('Rendering', currentZones.length, 'zones from category:', this.currentCategory);
+    // Filter zones: correct category/variant AND in viewport
+    const visibleZones = this.zones.filter(zone => {
+      // Category/variant filtering
+      if (zone.category !== this.currentCategory) return false;
+      if (this.currentVariant && zone.variant !== this.currentVariant) return false;
+      
+      // Viewport culling
+      const zoneBounds = zone.getBounds();
+      return !(
+        zoneBounds.maxX < viewportBounds.minX ||
+        zoneBounds.minX > viewportBounds.maxX ||
+        zoneBounds.maxY < viewportBounds.minY ||
+        zoneBounds.minY > viewportBounds.maxY
+      );
+    });
     
-    currentZones.forEach(zone => {
+    // Render only visible zones
+    visibleZones.forEach(zone => {
       this.renderZone(zone);
     });
 
@@ -214,15 +244,53 @@ export class ZoneSelector {
     }
   }
 
-  public setCategory(category: string): void {
-    if (!this.categories.includes(category)) return;
+  // Variant management methods
+  private updateVariantForZoom(): void {
+    const config = this.categoryConfigs.get(this.currentCategory);
+    if (!config || !config.autoSwitch) return;
     
-    this.currentCategory = category;
+    // Get current zoom from provider if it supports it
+    const zoom = this.provider.getZoomLevel?.() || 0;
+    
+    // Find first matching variant
+    for (const variant of config.variants) {
+      if ((!variant.minZoom || zoom >= variant.minZoom) && 
+          (!variant.maxZoom || zoom <= variant.maxZoom)) {
+        if (this.currentVariant !== variant.id) {
+          this.currentVariant = variant.id;
+          this.render(); // Re-render with new variant
+        }
+        return;
+      }
+    }
+    
+    // Default to first variant
+    const firstVariant = config.variants[0]?.id || '';
+    if (this.currentVariant !== firstVariant) {
+      this.currentVariant = firstVariant;
+      this.render();
+    }
+  }
+
+  public setCategory(categoryId: string, variantId?: string): void {
+    if (!this.categories.includes(categoryId)) return;
+    
+    this.currentCategory = categoryId;
+    if (variantId) {
+      this.currentVariant = variantId;
+    } else {
+      this.updateVariantForZoom();
+    }
     this.render();
     
     if (this.onCategoryChange) {
-      this.onCategoryChange(category);
+      this.onCategoryChange(categoryId, this.currentVariant);
     }
+  }
+
+  public setVariant(variantId: string): void {
+    this.currentVariant = variantId;
+    this.render();
   }
 
   public getCategories(): string[] {
@@ -231,6 +299,10 @@ export class ZoneSelector {
 
   public getCurrentCategory(): string {
     return this.currentCategory;
+  }
+
+  public getCurrentVariant(): string {
+    return this.currentVariant;
   }
 
   public getSelectedZones(): Zone[] {

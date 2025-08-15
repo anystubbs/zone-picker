@@ -27,6 +27,7 @@
   "author": "",
   "license": "UNLICENSED",
   "devDependencies": {
+    "@types/leaflet": "^1.9.20",
     "@types/node": "^24.2.1",
     "@vitest/ui": "^3.2.4",
     "jsdom": "^26.1.0",
@@ -35,6 +36,8 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "paper": "^0.12.18"
+    "leaflet-pixi-overlay": "^1.9.4",
+    "paper": "^0.12.18",
+    "pixi.js": "^7.1.2"
   }
 }

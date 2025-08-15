@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zone Selector Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #map-canvas {
+            border: 1px solid #ccc;
+            margin: 20px 0;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        .controls button {
+            margin-right: 10px;
+            padding: 8px 16px;
+            cursor: pointer;
+        }
+        .controls button.active {
+            background-color: #0066cc;
+            color: white;
+        }
+        .selected-zones {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+        .zone-list {
+            list-style: none;
+            padding: 0;
+        }
+        .zone-list li {
+            padding: 4px 8px;
+            margin: 2px 0;
+            background-color: white;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Zone Selector Library Demo</h1>
+    
+    <div class="controls">
+        <h3>Categories:</h3>
+        <div id="category-buttons">
+            <!-- Buttons will be generated dynamically -->
+        </div>
+        
+        <div id="variant-controls" style="margin: 10px 0;">
+            <h3>Variant:</h3>
+            <div id="variant-buttons" style="margin-bottom: 10px;">
+                <!-- Variant buttons will be generated dynamically -->
+            </div>
+        </div>
+        
+        <h3>Drag Mode:</h3>
+        <div id="drag-mode-buttons">
+            <button id="lasso-mode" onclick="setDragMode('lasso')">Lasso Selection</button>
+            <button id="path-mode" onclick="setDragMode('path')">Path Intersection</button>
+        </div>
+    </div>
+    
+    <canvas id="map-canvas" width="800" height="600"></canvas>
+    
+    <button onclick="clearSelection()">Clear All Selections</button>
+    
+    <div class="selected-zones">
+        <h3>Selected Zones:</h3>
+        <ul id="selected-list" class="zone-list">
+            <!-- Selected zones will appear here -->
+        </ul>
+    </div>
+
+    <script type="module">
+        import { ZoneSelector, CanvasRenderingProvider, Zone } from '../dist/index.esm.js';
+        import { seedZones, viewportBounds } from './demoData.js';
+
+
+        // Get canvas element
+        const canvas = document.getElementById('map-canvas');
+        
+        // Initialize zone selector
+        let zoneSelector;
+        
+        function initZoneSelector() {
+            // Create Canvas rendering provider
+            const provider = new CanvasRenderingProvider(canvas, viewportBounds);
+            
+            // Convert raw data to Zone instances
+            const convertedZones = seedZones.map(zoneData => new Zone({
+                id: zoneData.id,
+                name: zoneData.name,
+                category: zoneData.category,
+                variant: zoneData.variant,
+                geometry: zoneData.geometry
+            }));
+            
+            // Dynamically collect category/variant pairs from data
+            const categoryVariantMap = new Map();
+            convertedZones.forEach(zone => {
+                if (!categoryVariantMap.has(zone.category)) {
+                    categoryVariantMap.set(zone.category, new Set());
+                }
+                categoryVariantMap.get(zone.category).add(zone.variant);
+            });
+            
+            // Generate category configurations
+            const categoryConfigs = Array.from(categoryVariantMap.entries()).map(([category, variants]) => {
+                const variantArray = Array.from(variants).sort();
+                
+                // Define zoom ranges based on category and variant
+                const getVariantConfig = (category, variant) => {
+                    if (category === 'countries') {
+                        return { id: variant, minZoom: 0, maxZoom: 18 };
+                    } else if (category === 'h3') {
+                        const level = parseInt(variant);
+                        const zoomRanges = {
+                            3: { minZoom: 0, maxZoom: 6 },
+                            4: { minZoom: 5, maxZoom: 8 },
+                            5: { minZoom: 7, maxZoom: 10 },
+                            6: { minZoom: 9, maxZoom: 18 }
+                        };
+                        return { id: variant, ...zoomRanges[level] };
+                    }
+                    return { id: variant, minZoom: 0, maxZoom: 18 };
+                };
+                
+                return {
+                    id: category,
+                    autoSwitch: false, // Canvas demo uses manual selection
+                    variants: variantArray.map(variant => getVariantConfig(category, variant))
+                };
+            });
+            
+            zoneSelector = new ZoneSelector({
+                provider: provider,
+                zones: convertedZones,
+                categories: categoryConfigs,
+                dragMode: 'lasso', // Default to lasso mode
+                onSelectionChange: updateSelectedZones,
+                onCategoryChange: updateActiveCategory
+            });
+            
+            // Generate category and variant buttons
+            generateCategoryButtons();
+            generateVariantButtons();
+            
+            // Set initial drag mode button state
+            document.getElementById('lasso-mode').classList.add('active');
+        }
+
+        function generateCategoryButtons() {
+            const buttonContainer = document.getElementById('category-buttons');
+            const categories = zoneSelector.getCategories();
+            
+            categories.forEach(category => {
+                const button = document.createElement('button');
+                button.textContent = category;
+                button.onclick = () => {
+                    // Get available variants for this category
+                    const availableVariants = new Set();
+                    zoneSelector.zones.forEach(zone => {
+                        if (zone.category === category) {
+                            availableVariants.add(zone.variant);
+                        }
+                    });
+                    
+                    const firstVariant = Array.from(availableVariants).sort()[0];
+                    zoneSelector.setCategory(category, firstVariant); // Set category with first variant
+                    generateVariantButtons(); // Update variant buttons when category changes
+                };
+                
+                if (category === zoneSelector.getCurrentCategory()) {
+                    button.classList.add('active');
+                }
+                
+                buttonContainer.appendChild(button);
+            });
+        }
+
+        function generateVariantButtons() {
+            const buttonContainer = document.getElementById('variant-buttons');
+            buttonContainer.innerHTML = ''; // Clear existing buttons
+            
+            const currentCategory = zoneSelector.getCurrentCategory();
+            const currentVariant = zoneSelector.getCurrentVariant();
+            
+            // Get available variants for current category from the zone data
+            const availableVariants = new Set();
+            zoneSelector.zones.forEach(zone => {
+                if (zone.category === currentCategory) {
+                    availableVariants.add(zone.variant);
+                }
+            });
+            
+            const sortedVariants = Array.from(availableVariants).sort();
+            
+            sortedVariants.forEach(variant => {
+                const button = document.createElement('button');
+                button.textContent = variant;
+                button.onclick = () => {
+                    zoneSelector.setVariant(variant);
+                };
+                
+                if (variant === currentVariant) {
+                    button.classList.add('active');
+                }
+                
+                buttonContainer.appendChild(button);
+            });
+        }
+
+        function updateSelectedZones(selectedZones) {
+            const list = document.getElementById('selected-list');
+            list.innerHTML = '';
+            
+            selectedZones.forEach(zone => {
+                const li = document.createElement('li');
+                li.textContent = `${zone.name} (${zone.category})`;
+                list.appendChild(li);
+            });
+        }
+
+        function updateActiveCategory(category, variant) {
+            // Update category button states
+            const categoryButtons = document.querySelectorAll('#category-buttons button');
+            categoryButtons.forEach(button => {
+                button.classList.toggle('active', button.textContent === category);
+            });
+            
+            // Update variant button states
+            const variantButtons = document.querySelectorAll('#variant-buttons button');
+            variantButtons.forEach(button => {
+                button.classList.toggle('active', button.textContent === variant);
+            });
+            
+            
+            // Refresh variant buttons for new category
+            generateVariantButtons();
+            
+            // Log variant info for debugging
+            console.log(`Category: ${category}, Variant: ${variant}`);
+        }
+
+        window.clearSelection = function() {
+            zoneSelector.clearSelection();
+        };
+
+        window.setDragMode = function(mode) {
+            zoneSelector.setDragMode(mode);
+            
+            // Update button states
+            const buttons = document.querySelectorAll('#drag-mode-buttons button');
+            buttons.forEach(button => {
+                button.classList.toggle('active', button.id === mode + '-mode');
+            });
+        };
+
+        // Initialize when page loads
+        window.addEventListener('load', () => {
+            console.log('Page loaded, initializing...');
+            initZoneSelector();
+        });
+    </script>
+</body>
+</html>

@@ -1,4 +1,5 @@
 export { ZoneSelector } from './ZoneSelector';
-export { CanvasRenderingProvider } from './providers';
+export { CanvasRenderingProvider, LeafletRenderingProvider } from './providers';
 export type { RenderingProvider } from './providers';
-export type { Zone, ZoneSelectorConfig, ViewportBounds, Category } from './types';
+export { Zone } from './types';
+export type { ZoneSelectorConfig, ViewportBounds, Category } from './types';
