@@ -125,6 +125,14 @@
                             6: { minZoom: 8, maxZoom: 18 }
                         };
                         return { id: variant, ...zoomRanges[level] };
+                    } else if (category === 'nuts') {
+                        const level = parseInt(variant);
+                        const zoomRanges = {
+                            1: { minZoom: 0, maxZoom: 6 },  // Major regions
+                            2: { minZoom: 5, maxZoom: 9 },  // Regional policies  
+                            3: { minZoom: 8, maxZoom: 18 }  // Local diagnoses
+                        };
+                        return { id: variant, ...zoomRanges[level] };
                     }
                     return { id: variant, minZoom: 0, maxZoom: 18 };
                 };
