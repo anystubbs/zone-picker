@@ -61,6 +61,10 @@
             <button id="lasso-mode" onclick="setDragMode('lasso')">Lasso Selection</button>
             <button id="path-mode" onclick="setDragMode('path')">Path Intersection</button>
         </div>
+        
+        <div style="margin: 10px 0; padding: 8px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; font-size: 13px;">
+            <strong>💡 Tip:</strong> Hold <kbd>Ctrl</kbd> while dragging to select zones. Without Ctrl, map pans/zooms normally.
+        </div>
     </div>
     
     <div id="leaflet-map"></div>
@@ -115,10 +119,10 @@
                     } else if (category === 'h3') {
                         const level = parseInt(variant);
                         const zoomRanges = {
-                            3: { minZoom: 0, maxZoom: 4 },
-                            4: { minZoom: 3, maxZoom: 6 },
-                            5: { minZoom: 5, maxZoom: 8 },
-                            6: { minZoom: 7, maxZoom: 18 }
+                            3: { minZoom: 0, maxZoom: 5 },
+                            4: { minZoom: 4, maxZoom: 7 },
+                            5: { minZoom: 6, maxZoom: 9 },
+                            6: { minZoom: 8, maxZoom: 18 }
                         };
                         return { id: variant, ...zoomRanges[level] };
                     }

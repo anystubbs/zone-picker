@@ -65,6 +65,12 @@ export class ZoneSelector {
     
     // Set up provider-based event handlers
     this.provider.onMouseDown((event: ProviderMouseEvent) => {
+      // Only handle selection when Ctrl key is pressed (for Leaflet provider)
+      const isCtrlPressed = event.originalEvent && (event.originalEvent as any).ctrlKey;
+      if (!isCtrlPressed && this.provider.constructor.name === 'LeafletRenderingProvider') {
+        return; // Let Leaflet handle normal map interaction
+      }
+      
       // Always prepare for potential drag selection
       this.dragStart = { x: event.point.x, y: event.point.y };
       
@@ -76,6 +82,12 @@ export class ZoneSelector {
     });
 
     this.provider.onMouseMove((event: ProviderMouseEvent) => {
+      // Only handle selection when Ctrl key is pressed (for Leaflet provider)
+      const isCtrlPressed = event.originalEvent && (event.originalEvent as any).ctrlKey;
+      if (!isCtrlPressed && this.provider.constructor.name === 'LeafletRenderingProvider') {
+        return; // Let Leaflet handle normal map interaction
+      }
+      
       if (!this.isDragging && this.dragStart) {
         // Start drag selection on first drag movement
         this.isDragging = true;
@@ -87,7 +99,13 @@ export class ZoneSelector {
       }
     });
 
-    this.provider.onMouseUp((_event: ProviderMouseEvent) => {
+    this.provider.onMouseUp((event: ProviderMouseEvent) => {
+      // Only handle selection when Ctrl key is pressed (for Leaflet provider)
+      const isCtrlPressed = event.originalEvent && (event.originalEvent as any).ctrlKey;
+      if (!isCtrlPressed && this.provider.constructor.name === 'LeafletRenderingProvider') {
+        return; // Let Leaflet handle normal map interaction
+      }
+      
       if (this.isDragging && this.dragStart && this.selectionShape) {
         // Complete drag selection
         this.completeDragSelection();

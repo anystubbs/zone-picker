@@ -101,39 +101,49 @@ export class LeafletRenderingProvider implements RenderingProvider {
     this.isInitialized = true;
   }
 
+  private handleMouseEvent(e: L.LeafletMouseEvent, handlers: Array<(event: MouseEvent) => void>): void {
+    const point = this.leafletPointToCanvasPoint(e.containerPoint);
+    const worldCoords = this.canvasToWorld(point);
+    const mouseEvent: MouseEvent = {
+      point,
+      worldCoordinates: worldCoords,
+      originalEvent: e.originalEvent
+    };
+    
+    // Check if Ctrl key is pressed for selection mode
+    const isCtrlPressed = e.originalEvent && (e.originalEvent as any).ctrlKey;
+    if (isCtrlPressed) {
+      // Prevent default browser behavior (context menu, etc.) and Leaflet behavior
+      e.originalEvent?.preventDefault();
+      e.originalEvent?.stopPropagation();
+      L.DomEvent.stop(e);
+    }
+    
+    handlers.forEach(handler => handler(mouseEvent));
+  }
+
   private setupEventHandlers(): void {
     // Mouse events
     this.map.on('mousedown', (e: L.LeafletMouseEvent) => {
-      const point = this.leafletPointToCanvasPoint(e.containerPoint);
-      const worldCoords = this.canvasToWorld(point);
-      const mouseEvent: MouseEvent = {
-        point,
-        worldCoordinates: worldCoords,
-        originalEvent: e.originalEvent
-      };
-      this.mouseDownHandlers.forEach(handler => handler(mouseEvent));
+      this.handleMouseEvent(e, this.mouseDownHandlers);
     });
     
     this.map.on('mousemove', (e: L.LeafletMouseEvent) => {
-      const point = this.leafletPointToCanvasPoint(e.containerPoint);
-      const worldCoords = this.canvasToWorld(point);
-      const mouseEvent: MouseEvent = {
-        point,
-        worldCoordinates: worldCoords,
-        originalEvent: e.originalEvent
-      };
-      this.mouseMoveHandlers.forEach(handler => handler(mouseEvent));
+      this.handleMouseEvent(e, this.mouseMoveHandlers);
     });
     
     this.map.on('mouseup', (e: L.LeafletMouseEvent) => {
-      const point = this.leafletPointToCanvasPoint(e.containerPoint);
-      const worldCoords = this.canvasToWorld(point);
-      const mouseEvent: MouseEvent = {
-        point,
-        worldCoordinates: worldCoords,
-        originalEvent: e.originalEvent
-      };
-      this.mouseUpHandlers.forEach(handler => handler(mouseEvent));
+      this.handleMouseEvent(e, this.mouseUpHandlers);
+    });
+    
+    // Prevent context menu when Ctrl is pressed
+    this.map.getContainer().addEventListener('contextmenu', (e: Event) => {
+      const mouseEvent = e as globalThis.MouseEvent;
+      if (mouseEvent.ctrlKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
     });
     
     // Viewport change events
